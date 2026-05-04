@@ -1,24 +1,40 @@
 package com.co.inventoryconsumer.dto.product;
 
 import com.co.inventoryconsumer.domain.product.UnitOfMeasure;
+import jakarta.validation.constraints.*;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.UUID;
 
-public class ProductDTO {
+public class ProductRequestDTO {
 
-    private UUID id;
+    @NotBlank(message = "El nombre del producto es obligatorio")
+    @Size(min = 2, max = 100, message = "El nombre del producto debe tener entre 2 y 100 caracteres")
     private String name;
-    private UUID categoryId;
-    private UUID locationId;
-    private UnitOfMeasure unitOfMeasure;
-    private BigDecimal salePrice;
-    private BigDecimal stock;
-    private LocalDate startDate;
 
-    public UUID getId() { return id; }
-    public void setId(UUID id) { this.id = id; }
+    @NotNull(message = "El id de la categoria es obligatorio")
+    private UUID categoryId;
+
+    @NotNull(message = "El id de la sede es obligatorio")
+    private UUID locationId;
+
+    @NotNull(message = "La unidad de medida es obligatoria")
+    private UnitOfMeasure unitOfMeasure;
+
+    @NotNull(message = "El precio de venta es obligatorio")
+    @DecimalMin(value = "0.001", inclusive = true, message = "El precio de venta debe ser mayor a cero")
+    @DecimalMax(value = "99999999.999", message = "El precio de venta no puede superar 99,999,999.999")
+    private BigDecimal salePrice;
+
+    @NotNull(message = "El stock es obligatorio")
+    @DecimalMin(value = "0.000", inclusive = true, message = "El stock no puede ser negativo")
+    @DecimalMax(value = "99999999.999", message = "El stock no puede superar 99,999,999.999")
+    private BigDecimal stock;
+
+    @NotNull(message = "La fecha de inicio es obligatoria")
+    @PastOrPresent(message = "La fecha de inicio no puede ser una fecha futura")
+    private LocalDate startDate;
 
     public String getName() { return name; }
     public void setName(String name) { this.name = name; }
@@ -29,7 +45,7 @@ public class ProductDTO {
     public UUID getLocationId() { return locationId; }
     public void setLocationId(UUID locationId) { this.locationId = locationId; }
 
-    public UnitOfMeasure getUnitOfMeasure() { return unitOfMeasure; }
+    public com.co.inventoryconsumer.domain.product.UnitOfMeasure getUnitOfMeasure() { return unitOfMeasure; }
     public void setUnitOfMeasure(UnitOfMeasure unitOfMeasure) { this.unitOfMeasure = unitOfMeasure; }
 
     public BigDecimal getSalePrice() { return salePrice; }
