@@ -6,10 +6,13 @@ import com.co.inventoryconsumer.domain.transfer.Transfer;
 import com.co.inventoryconsumer.domain.transfer.TransferStatus;
 import com.co.inventoryconsumer.dto.transfer.TransferRequestDTO;
 import com.co.inventoryconsumer.dto.transfer.TransferResponseDTO;
+import com.co.inventoryconsumer.dto.transfer.TransferStatusUpdateDTO;
 import com.co.inventoryconsumer.repositories.location.LocationRepository;
 import com.co.inventoryconsumer.repositories.product.ProductRepository;
 import com.co.inventoryconsumer.repositories.transfer.TransferRepository;
 import com.co.inventoryconsumer.utils.transfer.publisher.TransferResponsePublisher;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -19,6 +22,11 @@ import java.util.UUID;
 
 @Service
 public class TransferService {
+
+    private static final Logger LOGGER = LoggerFactory.getLogger(TransferService.class);
+    private static final String LOG_SEPARATOR = "======================================";
+    private static final String ORIGIN_ROLE = "origen";
+    private static final String DESTINATION_ROLE = "destino";
 
     private record TransferProducts(Product originProduct, Product destinationProduct) {
     }
@@ -40,10 +48,10 @@ public class TransferService {
 
     @Transactional
     public TransferResponseDTO processTransfer(TransferRequestDTO request) {
-        System.out.println("======================================");
-        System.out.println("START PROCESS TRANSFER");
-        System.out.println("Request received: " + request);
-        System.out.println("======================================");
+        LOGGER.info(LOG_SEPARATOR);
+        LOGGER.info("START PROCESS TRANSFER");
+        LOGGER.info("Request received: {}", request);
+        LOGGER.info(LOG_SEPARATOR);
 
         TransferProducts products = validateAndLoadRequest(request);
 
@@ -63,22 +71,61 @@ public class TransferService {
         return toResponse(savedTransfer);
     }
 
+    @Transactional
+    public TransferResponseDTO updateTransferStatus(TransferStatusUpdateDTO request) {
+        LOGGER.info(LOG_SEPARATOR);
+        LOGGER.info("START UPDATE TRANSFER STATUS");
+        LOGGER.info("Request received: {}", request);
+        LOGGER.info(LOG_SEPARATOR);
+
+        validateStatusUpdateRequest(request);
+
+        Transfer transfer = transferRepository.findById(request.idTraslado())
+                .orElseThrow(() -> new IllegalArgumentException("Transferencia no encontrada con id: " + request.idTraslado()));
+
+        syncTransitStatus(transfer);
+
+        if (request.estado() == TransferStatus.CANCELADO) {
+            validateCancellationAllowed(transfer, request.sedeOrigen());
+        }
+        if (request.estado() == TransferStatus.EN_TRANSITO) {
+            validateTransitAllowed(transfer, request.sedeOrigen());
+        }
+        if (request.estado() == TransferStatus.COMPLETADO || request.estado() == TransferStatus.RECLAMADO) {
+            validateDestinationActionAllowed(transfer, request);
+        }
+
+        validateStatusTransition(transfer.getEstado(), request.estado());
+
+        if (request.estado() == TransferStatus.COMPLETADO) {
+            applyInventoryMovement(transfer);
+        }
+        if (request.estado() == TransferStatus.RECLAMADO) {
+            transfer.setObservaciones(normalizeClaimObservations(request.observaciones()));
+        }
+
+        transfer.setEstado(request.estado());
+
+        Transfer savedTransfer = transferRepository.save(transfer);
+        return toResponse(savedTransfer);
+    }
+
     public void publishResponse(TransferResponseDTO response) {
-        System.out.println("======================================");
-        System.out.println("ATTEMPTING TO PUBLISH TRANSFER RESPONSE");
-        System.out.println("OBJECT: " + response);
-        System.out.println("======================================");
+        LOGGER.info(LOG_SEPARATOR);
+        LOGGER.info("ATTEMPTING TO PUBLISH TRANSFER RESPONSE");
+        LOGGER.info("OBJECT: {}", response);
+        LOGGER.info(LOG_SEPARATOR);
 
         publisher.publish(response);
     }
 
     private TransferProducts validateAndLoadRequest(TransferRequestDTO request) {
         validateRequest(request);
-        LocationDomain originLocation = validateLocationExistsAndActive(request.sedeOrigen(), "origen");
-        LocationDomain destinationLocation = validateLocationExistsAndActive(request.sedeDestino(), "destino");
+        LocationDomain originLocation = validateLocationExistsAndActive(request.sedeOrigen(), ORIGIN_ROLE);
+        LocationDomain destinationLocation = validateLocationExistsAndActive(request.sedeDestino(), DESTINATION_ROLE);
 
-        Product originProduct = findProductByNameAndLocation(request.producto(), originLocation.getId(), "origen");
-        Product destinationProduct = findProductByNameAndLocation(request.producto(), destinationLocation.getId(), "destino");
+        Product originProduct = findProductByNameAndLocation(request.producto(), originLocation.getId(), ORIGIN_ROLE);
+        Product destinationProduct = findProductByNameAndLocation(request.producto(), destinationLocation.getId(), DESTINATION_ROLE);
         validateStockAndQuantity(originProduct.getStock(), request.cantidad());
 
         return new TransferProducts(originProduct, destinationProduct);
@@ -92,6 +139,18 @@ public class TransferService {
         validateCoreFields(request);
         validateDates(request);
         validateQuantity(request);
+    }
+
+    private void validateStatusUpdateRequest(TransferStatusUpdateDTO request) {
+        if (request == null) {
+            throw new IllegalArgumentException("La solicitud de actualizacion no puede estar vacia");
+        }
+        if (request.idTraslado() == null || request.idTraslado() <= 0) {
+            throw new IllegalArgumentException("El id de la transferencia es obligatorio y debe ser mayor a cero");
+        }
+        if (request.estado() == null) {
+            throw new IllegalArgumentException("El estado es obligatorio");
+        }
     }
 
     private void validateLocations(TransferRequestDTO request) {
@@ -171,6 +230,113 @@ public class TransferService {
         }
         if (BigDecimal.valueOf(cantidad.longValue()).compareTo(stock) > 0) {
             throw new IllegalArgumentException("La cantidad a transferir no puede superar el stock disponible");
+        }
+    }
+
+    private void applyInventoryMovement(Transfer transfer) {
+        TransferProducts products = loadProductsFromTransfer(transfer);
+        BigDecimal quantity = BigDecimal.valueOf(transfer.getCantidad().longValue());
+
+        validateStockAndQuantity(products.originProduct().getStock(), transfer.getCantidad());
+
+        products.originProduct().setStock(products.originProduct().getStock().subtract(quantity));
+        products.destinationProduct().setStock(products.destinationProduct().getStock().add(quantity));
+
+        productRepository.save(products.originProduct());
+        productRepository.save(products.destinationProduct());
+        transfer.setStock(products.originProduct().getStock());
+    }
+
+    private TransferProducts loadProductsFromTransfer(Transfer transfer) {
+        LocationDomain originLocation = validateLocationExistsAndActive(transfer.getSedeOrigen(), ORIGIN_ROLE);
+        LocationDomain destinationLocation = validateLocationExistsAndActive(transfer.getSedeDestino(), DESTINATION_ROLE);
+
+        Product originProduct = findProductByNameAndLocation(transfer.getProducto(), originLocation.getId(), ORIGIN_ROLE);
+        Product destinationProduct = findProductByNameAndLocation(transfer.getProducto(), destinationLocation.getId(), DESTINATION_ROLE);
+
+        return new TransferProducts(originProduct, destinationProduct);
+    }
+
+    private void validateCancellationAllowed(Transfer transfer, String sedeOrigen) {
+        if (sedeOrigen == null || sedeOrigen.isBlank()) {
+            throw new IllegalArgumentException("La sede origen es obligatoria para cancelar");
+        }
+
+        validateLocationExistsAndActive(sedeOrigen, ORIGIN_ROLE);
+
+        if (!sedeOrigen.trim().equals(transfer.getSedeOrigen())) {
+            throw new IllegalArgumentException("Solo la sede origen puede cancelar el traslado");
+        }
+
+        if (transfer.getEstado() != TransferStatus.EN_PROCESO) {
+            throw new IllegalArgumentException("La sede origen solo puede cancelar traslados en estado EN_PROCESO");
+        }
+    }
+
+    private void validateDestinationActionAllowed(Transfer transfer, TransferStatusUpdateDTO request) {
+        if (request.sedeDestino() == null || request.sedeDestino().isBlank()) {
+            throw new IllegalArgumentException("La sede destino es obligatoria para gestionar el traslado");
+        }
+
+        validateLocationExistsAndActive(request.sedeDestino(), DESTINATION_ROLE);
+
+        if (!request.sedeDestino().trim().equals(transfer.getSedeDestino())) {
+            throw new IllegalArgumentException("Solo la sede destino puede gestionar esta accion");
+        }
+
+        if (transfer.getEstado() != TransferStatus.EN_TRANSITO) {
+            throw new IllegalArgumentException("Solo se pueden gestionar traslados en estado EN_TRANSITO");
+        }
+    }
+
+    private void validateTransitAllowed(Transfer transfer, String sedeOrigen) {
+        if (sedeOrigen == null || sedeOrigen.isBlank()) {
+            throw new IllegalArgumentException("La sede origen es obligatoria para enviar el traslado");
+        }
+
+        validateLocationExistsAndActive(sedeOrigen, ORIGIN_ROLE);
+
+        if (!sedeOrigen.trim().equals(transfer.getSedeOrigen())) {
+            throw new IllegalArgumentException("Solo la sede origen puede marcar el traslado en transito");
+        }
+
+        if (transfer.getEstado() != TransferStatus.EN_PROCESO) {
+            throw new IllegalArgumentException("Solo se pueden enviar a transito traslados en estado EN_PROCESO");
+        }
+    }
+
+    private String normalizeClaimObservations(String observaciones) {
+        if (observaciones == null || observaciones.isBlank()) {
+            throw new IllegalArgumentException("La observacion del reclamo es obligatoria");
+        }
+        return observaciones.trim();
+    }
+
+    private Transfer syncTransitStatus(Transfer transfer) {
+        if (transfer.getEstado() == TransferStatus.EN_PROCESO
+                && transfer.getFechaEnvio() != null
+                && !LocalDateTime.now().isBefore(transfer.getFechaEnvio())) {
+            transfer.setEstado(TransferStatus.EN_TRANSITO);
+            return transferRepository.save(transfer);
+        }
+        return transfer;
+    }
+
+    private void validateStatusTransition(TransferStatus currentStatus, TransferStatus nextStatus) {
+        if (currentStatus == nextStatus) {
+            return;
+        }
+
+        boolean validTransition = switch (currentStatus) {
+            case EN_PROCESO -> nextStatus == TransferStatus.CANCELADO || nextStatus == TransferStatus.EN_TRANSITO;
+            case EN_TRANSITO -> nextStatus == TransferStatus.COMPLETADO || nextStatus == TransferStatus.RECLAMADO;
+            case COMPLETADO, RECLAMADO, CANCELADO -> false;
+        };
+
+        if (!validTransition) {
+            throw new IllegalArgumentException(
+                    "No se permite cambiar el estado de " + currentStatus + " a " + nextStatus
+            );
         }
     }
 
