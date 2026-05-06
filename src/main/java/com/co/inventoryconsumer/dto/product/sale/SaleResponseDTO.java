@@ -1,4 +1,4 @@
-package com.co.inventoryconsumer.dto.product;
+package com.co.inventoryconsumer.dto.product.sale;
 
 import lombok.*;
 
@@ -12,12 +12,10 @@ import java.util.UUID;
 public class SaleResponseDTO {
 
     private UUID idMessage;
-    private boolean approved;
-    private String message;
 
+    private UUID locationId;
     private String sellerId;
-    private String locationId;
     private String tableId;
 
-    private List<SaleDetailResponseDTO> details;
+    private List<SaleRecipeResponseDTO> recipes;
 }

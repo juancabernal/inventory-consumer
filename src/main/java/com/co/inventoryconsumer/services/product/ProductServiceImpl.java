@@ -1,9 +1,9 @@
 package com.co.inventoryconsumer.services.product;
 
 import com.co.inventoryconsumer.domain.product.Product;
-import com.co.inventoryconsumer.dto.product.ProductDTO;
-import com.co.inventoryconsumer.dto.product.ProductPatchDTO;
-import com.co.inventoryconsumer.dto.product.ProductRequestDTO;
+import com.co.inventoryconsumer.dto.product.product.ProductDTO;
+import com.co.inventoryconsumer.dto.product.product.ProductPatchDTO;
+import com.co.inventoryconsumer.dto.product.product.ProductRequestDTO;
 import com.co.inventoryconsumer.repositories.product.ProductRepository;
 import com.co.inventoryconsumer.utils.exceptions.BusinessException;
 import com.co.inventoryconsumer.utils.exceptions.ResourceNotFoundException;

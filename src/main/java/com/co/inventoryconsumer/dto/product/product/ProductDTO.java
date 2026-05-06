@@ -1,4 +1,4 @@
-package com.co.inventoryconsumer.dto.product;
+package com.co.inventoryconsumer.dto.product.product;
 
 import com.co.inventoryconsumer.domain.product.UnitOfMeasure;
 

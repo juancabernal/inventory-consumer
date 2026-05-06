@@ -1,4 +1,4 @@
-package com.co.inventoryconsumer.dto.product;
+package com.co.inventoryconsumer.dto.product.sale;
 
 import lombok.*;
 
@@ -9,12 +9,15 @@ import java.util.UUID;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class SaleDetailDTO {
+public class SaleDetailResponseDTO {
 
     private UUID recipeId;
     private String lineDisplayName;
     private String recipeLineComment;
+
     private BigDecimal quantity;
     private BigDecimal unitPrice;
     private BigDecimal subtotal;
+
+    private boolean approved;
 }
