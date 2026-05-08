@@ -5,13 +5,14 @@ import org.springframework.stereotype.Component;
 
 import java.util.List;
 import java.util.UUID;
-import java.util.stream.Collectors;
 
 @Component
 public class ProductSaleMapper {
 
-    public SaleResponseDTO toResponse(ProductSaleRequestDTO request,
-                                      List<SaleRecipeResponseDTO> recipes) {
+    public SaleResponseDTO toResponse(
+            ProductSaleRequestDTO request,
+            List<SaleRecipeResponseDTO> recipes
+    ) {
 
         return SaleResponseDTO.builder()
                 .idMessage(UUID.randomUUID())
@@ -22,9 +23,31 @@ public class ProductSaleMapper {
                 .build();
     }
 
-    public SaleRecipeResponseDTO toRecipeResponse(SaleDetailDTO detail,
-                                                  boolean approved,
-                                                  String message) {
+    public SaleUpdateResponseDTO toUpdateResponse(
+            ProductSaleUpdateRequestDTO request,
+            List<SaleRecipeResponseDTO> recipes
+    ) {
+
+        SaleResponseDTO saleResponse =
+                SaleResponseDTO.builder()
+                        .idMessage(UUID.randomUUID())
+                        .locationId(request.getNewSale().getLocationId())
+                        .sellerId(request.getNewSale().getSellerId())
+                        .tableId(request.getNewSale().getTableId())
+                        .recipes(recipes)
+                        .build();
+
+        return SaleUpdateResponseDTO.builder()
+                .saleId(request.getOldSale().getId())
+                .sale(saleResponse)
+                .build();
+    }
+
+    public SaleRecipeResponseDTO toRecipeResponse(
+            SaleDetailDTO detail,
+            boolean approved,
+            String message
+    ) {
 
         return SaleRecipeResponseDTO.builder()
                 .recipeId(detail.getRecipeId())
@@ -38,13 +61,18 @@ public class ProductSaleMapper {
                 .build();
     }
 
-    public List<SaleRecipeResponseDTO> toRecipeResponseList(List<SaleDetailDTO> details) {
+    public List<SaleRecipeResponseDTO> toRecipeResponseList(
+            List<SaleDetailDTO> details
+    ) {
+
         return details.stream()
-                .map(d -> toRecipeResponse(
-                        d,
-                        true,
-                        "Receta aprobada"
-                ))
+                .map(detail ->
+                        toRecipeResponse(
+                                detail,
+                                true,
+                                "Receta aprobada"
+                        )
+                )
                 .toList();
     }
 }

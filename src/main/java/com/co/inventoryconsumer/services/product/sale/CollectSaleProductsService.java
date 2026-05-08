@@ -4,34 +4,24 @@ import com.co.inventoryconsumer.dto.product.sale.SaleDetailDTO;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
-import java.util.*;
+import java.util.List;
+import java.util.Map;
+import java.util.UUID;
 
 @Service
 public class CollectSaleProductsService {
 
-    private final ExpandRecipeProductsService expandService;
+    private final BuildSaleProductsService buildService;
 
-    public CollectSaleProductsService(ExpandRecipeProductsService expandService) {
-        this.expandService = expandService;
+    public CollectSaleProductsService(
+            BuildSaleProductsService buildService
+    ) {
+        this.buildService = buildService;
     }
 
-    public Map<UUID, BigDecimal> run(List<SaleDetailDTO> details) {
-
-        Map<UUID, BigDecimal> total = new HashMap<>();
-
-        for (SaleDetailDTO detail : details) {
-
-            Map<UUID, BigDecimal> partial =
-                    expandService.run(
-                            detail.getRecipeId(),
-                            detail.getQuantity()
-                    );
-
-            partial.forEach((productId, qty) ->
-                    total.merge(productId, qty, BigDecimal::add)
-            );
-        }
-
-        return total;
+    public Map<UUID, BigDecimal> run(
+            List<SaleDetailDTO> details
+    ) {
+        return buildService.run(details);
     }
 }

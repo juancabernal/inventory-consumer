@@ -1,78 +1,108 @@
 package com.co.inventoryconsumer.services.product.sale;
 
 import com.co.inventoryconsumer.dto.recipe.RecipeResponse;
-import com.co.inventoryconsumer.dto.recipe.RecipeSubRecipeRequest;
 import com.co.inventoryconsumer.services.recipe.GetRecipeByIdService;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
-import java.util.*;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Map;
+import java.util.Set;
+import java.util.UUID;
 
 @Service
 public class ExpandRecipeProductsService {
 
     private final GetRecipeByIdService getRecipeByIdService;
 
-    public ExpandRecipeProductsService(GetRecipeByIdService getRecipeByIdService) {
+    public ExpandRecipeProductsService(
+            GetRecipeByIdService getRecipeByIdService
+    ) {
         this.getRecipeByIdService = getRecipeByIdService;
     }
 
-    public Map<UUID, BigDecimal> run(UUID recipeId, BigDecimal multiplier) {
+    public Map<UUID, BigDecimal> run(
+            UUID recipeId,
+            BigDecimal multiplier
+    ) {
 
         Map<UUID, BigDecimal> accumulator = new HashMap<>();
 
-        process(recipeId, multiplier, accumulator, new HashSet<>());
+        boolean success = process(
+                recipeId,
+                multiplier,
+                accumulator,
+                new HashSet<>()
+        );
+
+        if (!success) {
+            return null;
+        }
 
         return accumulator;
     }
 
-    private void process(UUID recipeId,
-                         BigDecimal multiplier,
-                         Map<UUID, BigDecimal> acc,
-                         Set<UUID> visited) {
+    private boolean process(
+            UUID recipeId,
+            BigDecimal multiplier,
+            Map<UUID, BigDecimal> acc,
+            Set<UUID> visited
+    ) {
 
         if (visited.contains(recipeId)) {
-            throw new RuntimeException("Recursividad circular en receta: " + recipeId);
+            return false;
         }
 
         visited.add(recipeId);
 
-        RecipeResponse recipe = getRecipeByIdService.run(recipeId);
+        RecipeResponse recipe =
+                getRecipeByIdService.run(recipeId);
 
         if (recipe == null) {
-            throw new RuntimeException("RECIPE_NOT_FOUND");
+            return false;
         }
 
         if (recipe.getProducts() != null) {
-            recipe.getProducts().forEach(p -> {
 
-                BigDecimal qty = BigDecimal.valueOf(p.getQuantity())
-                        .multiply(multiplier);
+            recipe.getProducts().forEach(product -> {
+
+                BigDecimal quantity =
+                        BigDecimal.valueOf(product.getQuantity())
+                                .multiply(multiplier);
 
                 acc.merge(
-                        p.getProductId(),
-                        qty,
+                        product.getProductId(),
+                        quantity,
                         BigDecimal::add
                 );
             });
         }
 
         if (recipe.getSubRecipes() != null) {
+
             for (var sub : recipe.getSubRecipes()) {
 
-                BigDecimal newMultiplier = multiplier.multiply(
-                        BigDecimal.valueOf(sub.getQuantity())
-                );
+                BigDecimal newMultiplier =
+                        multiplier.multiply(
+                                BigDecimal.valueOf(sub.getQuantity())
+                        );
 
-                process(
+                boolean success = process(
                         sub.getSubRecipeId(),
                         newMultiplier,
                         acc,
                         visited
                 );
+
+                if (!success) {
+                    return false;
+                }
             }
         }
 
         visited.remove(recipeId);
+
+        return true;
     }
 }
