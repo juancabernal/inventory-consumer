@@ -20,7 +20,12 @@ public class IncreaseProductStockService {
 
     @Transactional
     public void run(StockUpdateDTO dto) {
-        UUID productId = UUID.fromString(dto.getProductId());
+        UUID productId;
+        try {
+            productId = UUID.fromString(dto.getProductId());
+        } catch (IllegalArgumentException ex) {
+            throw new BusinessException("El productId no tiene un formato UUID válido: " + dto.getProductId());
+        }
 
         Product product = repo.findById(productId)
                 .orElseThrow(() -> new BusinessException(

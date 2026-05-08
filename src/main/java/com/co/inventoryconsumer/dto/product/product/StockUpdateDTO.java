@@ -5,10 +5,10 @@ import java.util.UUID;
 
 public class StockUpdateDTO {
     private UUID locationId;
-    private String productId;
+    private UUID productId;
     private BigDecimal quantity;
 
     public UUID getLocationId() { return locationId; }
-    public String getProductId() { return productId; }
+    public UUID getProductId() { return productId; }
     public BigDecimal getQuantity() { return quantity; }
 }
