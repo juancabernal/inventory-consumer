@@ -36,6 +36,12 @@ public class RabbitProductConfig extends AbstractRabbitConfig {
     @Value("${rabbitmq.routing-key.product.delete}")
     private String deleteKey;
 
+    @Value("${rabbitmq.queue.product.stock}")
+    private String stockQueue;
+
+    @Value("${rabbitmq.routing-key.product.stock}")
+    private String stockKey;
+
     @Bean
     public DirectExchange productExchange() {
         return buildExchange(exchangeName);
@@ -79,5 +85,15 @@ public class RabbitProductConfig extends AbstractRabbitConfig {
     @Bean
     public Binding productDeleteBinding() {
         return buildBinding(productDeleteQueue(), productExchange(), deleteKey);
+    }
+
+    @Bean
+    public Queue productStockQueue() {
+        return buildQueue(stockQueue);
+    }
+
+    @Bean
+    public Binding productStockBinding() {
+        return buildBinding(productStockQueue(), productExchange(), stockKey);
     }
 }
