@@ -10,6 +10,7 @@ import com.co.inventoryconsumer.dto.recipe.RecipeSubRecipeRequest;
 import org.springframework.stereotype.Component;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
@@ -75,30 +76,34 @@ public class RecipeMapper {
     private List<RecipeProduct> mapProducts(List<RecipeProductRequest> products) {
 
         if (products == null) {
-            return List.of();
+            return new ArrayList<>();
         }
 
-        return products.stream().map(p -> {
+        List<RecipeProduct> result = new ArrayList<>();
+        for (RecipeProductRequest p : products) {
             RecipeProduct product = new RecipeProduct();
             product.setProductId(p.getProductId());
             product.setQuantity(p.getQuantity());
             product.setPrice(p.getPrice());
-            return product;
-        }).toList();
+            result.add(product);
+        }
+        return result;
     }
 
     private List<RecipeSubRecipe> mapSubRecipes(List<RecipeSubRecipeRequest> subs) {
 
         if (subs == null) {
-            return List.of();
+            return new ArrayList<>();
         }
 
-        return subs.stream().map(s -> {
+        List<RecipeSubRecipe> result = new ArrayList<>();
+        for (RecipeSubRecipeRequest s : subs) {
             RecipeSubRecipe sub = new RecipeSubRecipe();
             sub.setSubRecipeId(s.getSubRecipeId());
             sub.setQuantity(s.getQuantity());
-            return sub;
-        }).toList();
+            result.add(sub);
+        }
+        return result;
     }
 
     private List<RecipeProductRequest> mapProductsToResponse(List<RecipeProduct> products) {
