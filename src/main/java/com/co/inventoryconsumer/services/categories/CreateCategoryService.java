@@ -7,7 +7,6 @@ import com.co.inventoryconsumer.dto.categories.CategoryRequestDTO;
 import com.co.inventoryconsumer.repositories.categories.CategoryRepository;
 import com.co.inventoryconsumer.utils.categories.mapper.CategoryMapper;
 import com.co.inventoryconsumer.utils.categories.validation.CategoryValidator;
-import com.co.inventoryconsumer.utils.exceptions.BusinessException;
 import java.time.LocalDateTime;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
@@ -28,7 +27,11 @@ public class CreateCategoryService {
     @Transactional
     public CategoryDTO run(CategoryRequestDTO request) {
         CategoryValidator.validateCreateRequest(request);
-        validateCategoryNameDoesNotExist(request.getName());
+        CategoryDTO existingCategory = findExistingCategory(request.getName());
+        if (existingCategory != null) {
+            return existingCategory;
+        }
+
         repository.lockCategoryCnsCounter();
 
         CategoryDomain category = mapper.toDomain(request);
@@ -45,11 +48,10 @@ public class CreateCategoryService {
         return mapper.toDto(savedCategory);
     }
 
-    private void validateCategoryNameDoesNotExist(String name) {
-        repository.findByName(name)
-                .ifPresent(category -> {
-                    throw new BusinessException("Ya existe una categoria con este nombre");
-                });
+    private CategoryDTO findExistingCategory(String name) {
+        return repository.findByName(name)
+                .map(mapper::toDto)
+                .orElse(null);
     }
 
     private Long nextCns() {
