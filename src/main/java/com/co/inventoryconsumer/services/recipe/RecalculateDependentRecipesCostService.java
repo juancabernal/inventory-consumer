@@ -41,7 +41,7 @@ public class RecalculateDependentRecipesCostService {
 
     private void recalculateRecipe(RecipeDomain recipe) {
 
-        BigDecimal baseCost = calculateSubRecipesCost(recipe);
+        BigDecimal baseCost = calculateBaseCost(recipe);
 
         BigDecimal sellingPrice = sellingPriceService.run(
                 baseCost,
@@ -52,6 +52,22 @@ public class RecalculateDependentRecipesCostService {
         recipe.setSellingPrice(sellingPrice);
 
         repo.save(recipe);
+    }
+
+    private BigDecimal calculateBaseCost(RecipeDomain recipe) {
+        return calculateProductsCost(recipe).add(calculateSubRecipesCost(recipe));
+    }
+
+    private BigDecimal calculateProductsCost(RecipeDomain recipe) {
+
+        if (recipe.getProducts() == null || recipe.getProducts().isEmpty()) {
+            return BigDecimal.ZERO;
+        }
+
+        return recipe.getProducts()
+                .stream()
+                .map(p -> p.getPrice().multiply(BigDecimal.valueOf(p.getQuantity())))
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
     }
 
     private BigDecimal calculateSubRecipesCost(RecipeDomain recipe) {
